@@ -10,7 +10,7 @@
     --bg0:#0b0f1a; --bg1:#060810; --ink:#cfd8e6; --dim:#7c88a0; --line:#1c2333;
     --us:#57a6ff; --eu:#34d3b6; --uk:#8b7bff; --ca:#ff7a7a; --au:#ffcf5c;
     --jp:#ff8ad1; --glb:#7ee787; --press:#aeb8c8;
-    --tier:#ff9e4a; --infra:#52d6c9; --llm:#b98cff; --prod:#ffb454; --out:#7ee787;
+    --tier:#ff9e4a; --infra:#52d6c9; --llm:#b98cff; --prod:#ffb454; --out:#7ee787; --tool:#cbb2ff;
     --inbound:#ff9e4a; --personal:#ffb454; --pull:#52d6c9; --synth:#b98cff;
   }
   *{box-sizing:border-box}
@@ -196,7 +196,15 @@ const others = [
   {id:'o_user',  label:'You',          sub:'Regulatory & medical-affairs professional',                     type:'out',r:18,color:'var(--out)',ly:9.38,lx:0.63},
 ];
 
-const nodes = [...sources, ...others];
+// the Feed Agent's queryable tools (the agentic tool-loop)
+const tools = [
+  {id:'tl_search', label:'search',        sub:'search_related_signals — full-text search across the signals pool',   type:'tool',r:9,color:'var(--tool)',ly:6.18,lx:0.400},
+  {id:'tl_sem',    label:'semantic',      sub:'search_signals_semantic — vector search; find signals by meaning',    type:'tool',r:9,color:'var(--tool)',ly:6.47,lx:0.322},
+  {id:'tl_fetch',  label:'fetch page',    sub:'fetch_source_page — re-fetch the actual source document (Firecrawl)', type:'tool',r:9,color:'var(--tool)',ly:6.88,lx:0.300},
+  {id:'tl_digest', label:'recall digest', sub:'get_latest_digest — recall the previous digest for continuity',       type:'tool',r:9,color:'var(--tool)',ly:7.29,lx:0.322},
+  {id:'tl_final',  label:'finalize',      sub:'finalize_stories — emit the 25–40 synthesized stories (ends the loop)',type:'tool',r:9,color:'var(--tool)',ly:7.59,lx:0.400},
+];
+const nodes = [...sources, ...others, ...tools];
 nodes.forEach(n=>{ n.x=xOf(n.ly); n.y=yOf(n.lx); });
 const byId = Object.fromEntries(nodes.map(n=>[n.id,n]));
 
@@ -226,13 +234,16 @@ const links = [
   L('pool','o_feed','synth'), L('p_rel','o_feed','pull'),
   L('o_feed','o_stories','synth'), L('o_stories','o_digest','synth'),
   L('o_digest','o_email','synth'), L('o_email','o_user','synth'),
+  // Feed Agent → its queryable tools (agentic loop)
+  L('o_feed','tl_search','tool'), L('o_feed','tl_sem','tool'), L('o_feed','tl_fetch','tool'),
+  L('o_feed','tl_digest','tool'), L('o_feed','tl_final','tool'),
 ];
 links.forEach((l,i)=>{ l.bow=((i%5)-2)*9; l.phase=i*0.63; });
 
-const kindColor = {inbound:'var(--inbound)',personal:'var(--personal)',pull:'var(--pull)',synth:'var(--synth)'};
-const kindHex   = {inbound:'#ff9e4a',personal:'#ffb454',pull:'#52d6c9',synth:'#b98cff'};
-const kindSpeed = {inbound:0.19,personal:0.16,pull:0.22,synth:0.15};
-const kindCount = {inbound:3,personal:2,pull:3,synth:2};
+const kindColor = {inbound:'var(--inbound)',personal:'var(--personal)',pull:'var(--pull)',synth:'var(--synth)',tool:'var(--tool)'};
+const kindHex   = {inbound:'#ff9e4a',personal:'#ffb454',pull:'#52d6c9',synth:'#b98cff',tool:'#cbb2ff'};
+const kindSpeed = {inbound:0.19,personal:0.16,pull:0.22,synth:0.15,tool:0.28};
+const kindCount = {inbound:3,personal:2,pull:3,synth:2,tool:2};
 
 // ---------- svg scaffold ----------
 const svg = d3.select('#svg').attr('viewBox',`0 0 ${VW} ${VH}`);
@@ -309,7 +320,7 @@ nodeSel.filter(d=>d.llm).append('text').text('✦')
 
 // labels
 nodeSel.append('text').attr('class','nlabel')
-  .attr('y',d=>d.r+14).text(d=>d.label);
+  .attr('y',d=> d.type==='tool' ? -(d.r+8) : d.r+14).text(d=>d.label);
 nodeSel.filter(d=>d.tag).append('text').attr('class','nsub')
   .attr('y',d=>d.r+26).text(d=>d.tag);
 
@@ -334,8 +345,10 @@ const stages = [
    nodes:['a_orch','a_gate','a_class','a_embed','pool']},
   {step:'④ Your product reaches into the pool', sub:'The Relevance Scorer (own 1.0 · competitor 0.8 · therapeutic area 0.6 × severity) and Profile Search Agent (knowledge-graph hops) pull the matching signals — tiered must-see / digest / exploratory.',
    nodes:['p_prod','p_entity','p_watch','p_rel','p_psa','pool']},
-  {step:'⑤ Synthesized & delivered', sub:'The Feed Agent (Claude Sonnet 4, “editorial director”) writes 25–40 cross-referenced stories; the Digest Agent assembles your personalized email — delivered in your local morning via Resend.',
-   nodes:['pool','p_rel','o_feed','o_stories','o_digest','o_email','o_user']},
+  {step:'⑤ The agent works its tools', sub:'The Feed Agent (Claude Sonnet 4) isn’t one prompt — it runs an agentic loop, calling tools to search the pool (full-text + semantic), re-fetch source documents, and recall past digests before it writes anything.',
+   nodes:['pool','o_feed','tl_search','tl_sem','tl_fetch','tl_digest','tl_final']},
+  {step:'⑥ Synthesized & delivered', sub:'It writes 25–40 cross-referenced stories via finalize_stories; the Digest Agent then assembles your personalized email — delivered in your local morning via Resend.',
+   nodes:['o_feed','tl_final','o_stories','o_digest','o_email','o_user']},
 ];
 let cur=0, playing=true, timer=null;
 const stepEl=document.getElementById('nstep'), subEl=document.getElementById('nsub');
@@ -420,6 +433,7 @@ document.getElementById('legend').innerHTML = `
   <div class="lrow"><span class="dot" style="color:var(--tier)"></span>Fetch tier — RSS · API · Firecrawl</div>
   <div class="lrow"><span class="dot" style="color:var(--infra)"></span>Pipeline agent</div>
   <div class="lrow"><span class="dot" style="color:var(--llm)"></span>Claude LLM agent ✦</div>
+  <div class="lrow"><span class="dot" style="color:var(--tool)"></span>Agent tool-call</div>
   <div class="lrow"><span class="dot" style="color:var(--prod)"></span>Your tracked product</div>
   <div class="lrow"><span class="dot" style="color:var(--out)"></span>Feed & digest to you</div>
   <div class="lrow" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
