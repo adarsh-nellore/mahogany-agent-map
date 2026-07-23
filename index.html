@@ -62,6 +62,38 @@
   .nsub{font-size:9px;fill:#8794ac;pointer-events:none;text-anchor:middle}
   .node{cursor:grab}
   .node:active{cursor:grabbing}
+
+  /* sources catalog */
+  .srcbtn{pointer-events:auto;margin-top:12px;background:#18233a;color:#dfe7f4;border:1px solid #2c3a5a;
+    border-radius:9px;padding:7px 12px;font-size:11.5px;font-weight:600;cursor:pointer;transition:.15s;
+    display:inline-flex;align-items:center;gap:7px}
+  .srcbtn:hover{background:#213052;border-color:#3d4f78}
+  .srcbtn b{color:var(--us)}
+  .modal{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+    background:rgba(4,7,13,.74);backdrop-filter:blur(4px)}
+  .modal.open{display:flex}
+  .modalcard{width:min(940px,92vw);max-height:84vh;display:flex;flex-direction:column;background:#0c1220;
+    border:1px solid #26314a;border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.6);overflow:hidden}
+  .modalhead{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;border-bottom:1px solid #1b2233}
+  .modalhead b{font-size:15px;color:#fff}
+  .modalhead .cnt{color:var(--dim);font-size:12.5px;font-weight:500;margin-left:6px}
+  #srcClose{background:#182131;border:1px solid #2b3550;color:#cdd6e4;border-radius:8px;width:30px;height:30px;
+    font-size:14px;cursor:pointer;line-height:1}
+  #srcClose:hover{background:#22304d}
+  .modalsub{padding:10px 20px;font-size:11.5px;color:var(--dim);border-bottom:1px solid #141b29;
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+  .tierkey{display:flex;gap:14px}
+  .tierkey span{display:inline-flex;align-items:center;gap:6px}
+  .tierkey i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .modalbody{padding:16px 20px 22px;overflow:auto;column-width:262px;column-gap:26px}
+  .reg{break-inside:avoid;margin:0 0 18px}
+  .reg h4{margin:0 0 8px;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#aab6cc;
+    border-bottom:1px solid #1b2233;padding-bottom:5px;display:flex;justify-content:space-between}
+  .reg h4 span{color:var(--dim);font-weight:500;letter-spacing:0}
+  .reg ul{list-style:none;margin:0;padding:0}
+  .reg li{display:flex;align-items:center;gap:9px;font-size:12px;color:#c4cde0;padding:3px 0;line-height:1.25}
+  .reg li i{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .reg li.p1{color:#e7edf8;font-weight:600}
 </style>
 </head>
 <body>
@@ -69,6 +101,7 @@
   <div class="kicker">Mahogany · Regulatory Intelligence Engine</div>
   <h1>How the agents pull regulatory events for <span>your products</span></h1>
   <p>Agents fetch the world's regulatory activity 24/7 into one pool; the products you track reach in and pull out what matters.</p>
+  <button class="srcbtn" id="srcBtn">▤ View all <b>132</b> sources</button>
 </div>
 
 <div class="legend" id="legend"></div>
@@ -87,6 +120,25 @@
 </div>
 
 <div class="foot">Ingestion is global; personalization happens at match-time. Labels reflect the real pipeline — models, cadences & agent names from the codebase.</div>
+
+<div class="modal" id="srcModal">
+  <div class="modalcard">
+    <div class="modalhead">
+      <div><b>All ingestion sources</b><span class="cnt" id="srcCount"></span></div>
+      <button id="srcClose">✕</button>
+    </div>
+    <div class="modalsub">
+      <span>The polling fetchers behind the Signals Pool, grouped by region. Fast poll every 4h (RSS + API) · deep scrape daily (Firecrawl).</span>
+      <span class="tierkey">
+        <span><i style="background:#ffb454"></i>RSS</span>
+        <span><i style="background:#4fd1e0"></i>API</span>
+        <span><i style="background:#8b7bff"></i>Firecrawl</span>
+      </span>
+    </div>
+    <div class="modalbody" id="srcBody"></div>
+  </div>
+</div>
+
 <div id="tip"></div>
 
 <script>
@@ -129,7 +181,7 @@ const others = [
   {id:'a_gate',  label:'Quality Gate & Dedup', sub:'Garbage filter + content-hash de-duplication',                   type:'infra',r:18,color:'var(--infra)',ly:3.02,lx:0.50},
   {id:'a_class', label:'Classifier',           sub:'Claude Haiku 4.5 — tags region, domain, impact type & severity', type:'llm',  r:21,color:'var(--llm)',  ly:3.86,lx:0.50,llm:true,tag:'Claude Haiku 4.5'},
   {id:'a_embed', label:'Embedder',             sub:'text-embedding-3-small · 1536-dim vectors for semantic search',  type:'infra',r:18,color:'var(--infra)',ly:4.70,lx:0.50,tag:'1536-dim vectors'},
-  {id:'pool',    label:'Signals Pool',         sub:'Shared store of every classified regulatory signal (~60+ sources, ~90 feeds)', type:'pool',r:46,color:'#dce9ff',ly:5.72,lx:0.50,tag:'~90 source feeds'},
+  {id:'pool',    label:'Signals Pool',         sub:'Shared store of every classified regulatory signal (~60+ sources, ~90 feeds)', type:'pool',r:46,color:'#dce9ff',ly:5.72,lx:0.50,tag:'132 source feeds'},
 
   {id:'p_prod',  label:'Your Product', sub:'e.g. “CardioSense Pro — PMA P200123”',                          type:'product',r:22,color:'var(--prod)',ly:2.55,lx:0.11,tag:'e.g. PMA P200123'},
   {id:'p_entity',label:'Entity Resolver', sub:'Normalizes & de-dupes to a canonical entity + aliases',      type:'infra',r:16,color:'var(--infra)',ly:3.42,lx:0.11},
@@ -276,7 +328,7 @@ const stages = [
    nodes:'ALL'},
   {step:'① You enter a product', sub:'Type a product (or a 510(k)/PMA number). It’s resolved to a canonical entity and turned into watch items — product, competitors, therapeutic areas, frameworks.',
    nodes:['p_prod','p_entity','p_watch']},
-  {step:'② Agents fetch the world — 24/7', sub:'~90 sources across the FDA, EMA, MHRA, Health Canada, TGA, PMDA & more. Fast poll every 4h (RSS + APIs); deep Firecrawl scrape daily.',
+  {step:'② Agents fetch the world — 24/7', sub:'132 sources across the FDA, EMA, MHRA, Health Canada, TGA, PMDA & more. Fast poll every 4h (RSS + APIs); deep Firecrawl scrape daily.',
    nodes:[...sources.map(s=>s.id),'t_rss','t_api','t_fire','a_orch']},
   {step:'③ Every event is classified & embedded', sub:'De-duplicated, then Claude Haiku 4.5 tags region / domain / impact / severity; text-embedding-3-small adds semantic vectors — all into one shared Signals Pool.',
    nodes:['a_orch','a_gate','a_class','a_embed','pool']},
@@ -373,6 +425,35 @@ document.getElementById('legend').innerHTML = `
   <div class="lrow" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
     <span class="lt" style="background:var(--inbound)"></span>global fetch &nbsp;
     <span class="lt" style="background:var(--pull)"></span>product match</div>`;
+
+// ---------- sources catalog (real registry, grouped by region) ----------
+const SOURCES = {
+  "US": [["CDC Media Releases","firecrawl",1], ["CMS Newsroom","firecrawl",1], ["ClinicalTrials.gov API","api",1], ["FDA Accelerated Approvals","firecrawl",1], ["FDA Advisory Calendar","firecrawl",1], ["FDA CBER (Biologics) RSS","rss",1], ["FDA CDER (Drugs) RSS","rss",1], ["FDA Consumer Updates RSS","rss",1], ["FDA De Novo Decisions","firecrawl",1], ["FDA Drug Safety Labeling Changes","firecrawl",1], ["FDA Food Safety Recalls RSS","rss",1], ["FDA Guidance Documents","firecrawl",1], ["FDA MedWatch RSS","rss",1], ["FDA MedWatch Safety Alerts RSS","rss",1], ["FDA Novel Drug Approvals","firecrawl",1], ["FDA Outbreaks RSS","rss",1], ["FDA Press Releases RSS","rss",1], ["FDA Recalls RSS","rss",1], ["FDA Warning Letters","firecrawl",1], ["Federal Register API","api",1], ["openFDA 510(k)","api",1], ["openFDA Device Recalls","api",1], ["openFDA Drug Adverse Events","api",1], ["openFDA Drug Enforcement","api",1], ["openFDA Drug Submissions/CRLs","api",1], ["openFDA Drugs@FDA","api",1], ["openFDA MAUDE","api",1], ["openFDA PMA","api",1], ["Congress.gov Bills API","api",2], ["Eli Lilly Press","rss",2], ["Endpoints News","rss",2], ["FDA Drugs@FDA Search","firecrawl",2], ["FDA Health Fraud RSS","rss",2], ["FDA Import Alerts","firecrawl",2], ["FDA Insight RSS","rss",2], ["FDA NDC Directory (API)","api",2], ["FDA ORA/FOIA RSS","rss",2], ["FDA Orange Book (API)","api",2], ["FDA Orphan Designations","firecrawl",2], ["FDA PMC/PMR Database","firecrawl",2], ["FDA Purple Book","firecrawl",2], ["FDA REMS Database","firecrawl",2], ["FDA Workshops & Conferences","firecrawl",2], ["FDANews RSS","rss",2], ["Federal Register FDA RSS","rss",2], ["FierceBiotech","rss",2], ["FiercePharma","rss",2], ["GovInfo Bills RSS","rss",2], ["OIRA Regulatory Agenda","firecrawl",2], ["Regeneron Press","rss",2], ["Regulations.gov FDA Dockets","firecrawl",2], ["STAT News","rss",2], ["openFDA Device Classification","api",2], ["openFDA Drug Labels","api",2], ["Covington FDA Blog","firecrawl",3], ["DailyMed RSS","rss",3], ["Steptoe Regulatory Pulse","firecrawl",3], ["eCFR Title 21","firecrawl",3]],
+  "EU": [["EMA CHMP Highlights","firecrawl",1], ["EMA Medicines & Referrals (API)","api",1], ["EMA Medicines Under Evaluation","firecrawl",1], ["EMA News RSS","rss",1], ["EMA PRAC Highlights","firecrawl",1], ["EMA Scientific Advice","firecrawl",1], ["EMA Scientific Guidelines","firecrawl",1], ["MDCG Documents","firecrawl",1], ["BioNTech Press","rss",2], ["EMA Additional Monitoring","firecrawl",2], ["EMA Clinical Data Portal","firecrawl",2], ["EMA Orphan Medicines","firecrawl",2], ["EMA PRIME Designations","firecrawl",2], ["EU CTIS Trials","firecrawl",2], ["EU Community Register","firecrawl",2], ["EU Harmonised Standards","firecrawl",2], ["EU Orphan Designation Register","firecrawl",2], ["EUR-Lex Official Journal","firecrawl",2], ["HMA CMDh","firecrawl",2], ["MDCG Minutes","firecrawl",2], ["DEKRA Medical Devices","firecrawl",3], ["EMA Real World Data","firecrawl",3], ["TUV SUD Medical Devices","firecrawl",3]],
+  "UK": [["MHRA Alerts & Guidance (API)","api",1], ["MHRA All Publications","rss",1], ["MHRA Drug & Device Alerts","rss",1], ["MHRA Drug Safety Update","rss",1], ["MHRA Guidance & Regulation","rss",1], ["BSI Medical Devices","firecrawl",3], ["UK Legislation (SI)","rss",3]],
+  "Canada": [["Health Canada MDALL","firecrawl",1], ["Health Canada NOC","firecrawl",1], ["Health Canada Recalls RSS","rss",1], ["Health Canada Drug Product API","api",2], ["Health Canada Guidance Docs","firecrawl",2]],
+  "Australia": [["TGA Alerts & Recalls (API)","api",1], ["TGA News RSS","rss",1], ["TGA Safety Alerts RSS","rss",1], ["TGA AusPAR","firecrawl",2], ["TGA Rx Under Evaluation","firecrawl",2]],
+  "Japan": [["PMDA Approvals & Safety (API)","api",1], ["PMDA Guidance Documents","firecrawl",2]],
+  "Switzerland": [["Swissmedic News","firecrawl",2]],
+  "Global": [["WHO News & Outbreaks (API)","api",1], ["BioPharma Dive RSS","rss",2], ["Emergo Radar Newsletter","firecrawl",2], ["Endpoints News RSS","rss",2], ["Fierce Biotech RSS","rss",2], ["Fierce MedTech RSS","rss",2], ["Fierce Pharma RSS","rss",2], ["ICH News","firecrawl",2], ["ICMRA News","firecrawl",2], ["IEC/ISO TC Standards","firecrawl",2], ["IMDRF Consultations RSS","rss",2], ["IMDRF Documents RSS","rss",2], ["IMDRF News RSS","rss",2], ["MedTech Dive RSS","rss",2], ["PIC/S Publications","firecrawl",2], ["RAPS Regulatory Focus","firecrawl",2], ["STAT News RSS","rss",2], ["WHO News RSS","rss",2], ["WHO Prequalification","firecrawl",2], ["ANVISA Brazil","firecrawl",3], ["BusinessWire Health RSS","rss",3], ["GlobeNewsWire Health RSS","rss",3], ["GlobeNewswire Pharma","rss",3], ["HSA Singapore","firecrawl",3], ["Intertek Regulatory Updates","firecrawl",3], ["MFDS South Korea","firecrawl",3], ["Medsafe New Zealand","firecrawl",3], ["PR Newswire Health RSS","rss",3], ["PRNewswire Healthcare","rss",3], ["SGS Medical Devices","firecrawl",3], ["UL Solutions Insights","firecrawl",3]],
+};
+const TIERCOL={rss:'#ffb454',api:'#4fd1e0',firecrawl:'#8b7bff'};
+const REGNAME={US:'United States',EU:'European Union',UK:'United Kingdom',Canada:'Canada',Australia:'Australia',Japan:'Japan',Switzerland:'Switzerland',Global:'Global / Multi-region'};
+let totalSrc=0, srcHtml='';
+for(const [reg,list] of Object.entries(SOURCES)){
+  totalSrc+=list.length;
+  srcHtml+=`<div class="reg"><h4>${REGNAME[reg]||reg}<span>${list.length}</span></h4><ul>`;
+  for(const [label,tier,prio] of list)
+    srcHtml+=`<li class="${prio===1?'p1':''}"><i style="background:${TIERCOL[tier]}"></i>${label}</li>`;
+  srcHtml+='</ul></div>';
+}
+document.getElementById('srcBody').innerHTML=srcHtml;
+document.getElementById('srcCount').textContent=` — ${totalSrc} feeds across 8 regions`;
+const srcModal=document.getElementById('srcModal');
+document.getElementById('srcBtn').onclick=()=>srcModal.classList.add('open');
+document.getElementById('srcClose').onclick=()=>srcModal.classList.remove('open');
+srcModal.addEventListener('click',e=>{if(e.target===srcModal)srcModal.classList.remove('open');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')srcModal.classList.remove('open');});
 
 // init — start on the overview, paused (no autoplay)
 applyStage(); pause();
