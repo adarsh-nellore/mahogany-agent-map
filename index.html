@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mahogany — How the Agents Pull Regulatory Intelligence</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root{
+    --bg0:#0b0f1a; --bg1:#060810; --ink:#cfd8e6; --dim:#7c88a0; --line:#1c2333;
+    --us:#57a6ff; --eu:#34d3b6; --uk:#8b7bff; --ca:#ff7a7a; --au:#ffcf5c;
+    --jp:#ff8ad1; --glb:#7ee787; --press:#aeb8c8;
+    --tier:#ff9e4a; --infra:#52d6c9; --llm:#b98cff; --prod:#ffb454; --out:#7ee787;
+    --inbound:#ff9e4a; --personal:#ffb454; --pull:#52d6c9; --synth:#b98cff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:radial-gradient(1200px 900px at 50% 12%,#111a2e 0%,var(--bg0) 45%,var(--bg1) 100%);
+    color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+  #stage{position:fixed;inset:0}
+  svg{width:100%;height:100%;display:block}
+
+  /* header */
+  .hdr{position:fixed;top:20px;left:22px;z-index:5;width:322px;pointer-events:none;
+    background:rgba(12,17,28,.66);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px 15px;backdrop-filter:blur(9px);box-shadow:0 14px 44px rgba(0,0,0,.4)}
+  .hdr .kicker{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--infra);opacity:.9;font-weight:600;line-height:1.3}
+  .hdr h1{margin:6px 0 7px;font-size:19px;font-weight:700;letter-spacing:.2px;line-height:1.16}
+  .hdr h1 span{color:var(--prod)}
+  .hdr p{margin:0;font-size:12px;color:var(--dim);line-height:1.42}
+
+  /* legend */
+  .legend{position:fixed;top:22px;right:24px;z-index:5;background:rgba(12,17,28,.62);
+    border:1px solid var(--line);border-radius:12px;padding:12px 14px;backdrop-filter:blur(8px);font-size:11.5px}
+  .legend .lrow{display:flex;align-items:center;gap:8px;margin:5px 0;color:#b7c1d4}
+  .legend .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 8px currentColor}
+  .legend .lt{width:16px;height:3px;border-radius:2px;flex:0 0 auto}
+
+  /* narration — vertical panel, bottom-right */
+  .narr{position:fixed;right:22px;bottom:22px;left:auto;transform:none;z-index:6;width:300px;
+    background:rgba(11,16,27,.86);border:1px solid var(--line);border-radius:16px;padding:15px 16px 14px;
+    backdrop-filter:blur(10px);box-shadow:0 18px 60px rgba(0,0,0,.55)}
+  .narr .step{font-size:13.5px;font-weight:700;color:#fff;display:block;margin-bottom:7px;line-height:1.25}
+  .narr .capsub{font-size:12px;color:var(--dim);line-height:1.5;display:block}
+  .narr .ctrls{display:flex;align-items:center;gap:8px;margin-top:14px}
+  .narr button{background:#151c2c;color:var(--ink);border:1px solid #263049;border-radius:8px;
+    padding:6px 11px;font-size:11.5px;cursor:pointer;font-weight:600;transition:.15s}
+  .narr button:hover{background:#1d2740;border-color:#3a476a}
+  .narr #play{flex:1}
+  .narr .dots{display:flex;gap:7px;margin-top:13px;justify-content:center}
+  .narr .d{width:9px;height:9px;border-radius:50%;background:#2a344b;cursor:pointer;transition:.2s}
+  .narr .d.on{background:var(--prod);box-shadow:0 0 8px var(--prod);transform:scale(1.15)}
+  .foot{position:fixed;left:26px;bottom:20px;z-index:5;font-size:10.5px;color:#5a6579;max-width:300px;line-height:1.4;pointer-events:none}
+
+  /* tooltip */
+  #tip{position:fixed;z-index:20;pointer-events:none;opacity:0;transition:opacity .12s;
+    background:rgba(10,14,23,.96);border:1px solid #2b3550;border-radius:10px;padding:9px 12px;
+    font-size:12px;max-width:280px;line-height:1.45;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  #tip b{color:#fff;font-size:12.5px;display:block;margin-bottom:2px}
+  #tip .r{color:var(--dim)}
+
+  .nlabel{font-size:10.5px;fill:#dce4f1;font-weight:600;pointer-events:none;text-anchor:middle}
+  .nsub{font-size:9px;fill:#8794ac;pointer-events:none;text-anchor:middle}
+  .node{cursor:grab}
+  .node:active{cursor:grabbing}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="kicker">Mahogany · Regulatory Intelligence Engine</div>
+  <h1>How the agents pull regulatory events for <span>your products</span></h1>
+  <p>Agents fetch the world's regulatory activity 24/7 into one pool; the products you track reach in and pull out what matters.</p>
+</div>
+
+<div class="legend" id="legend"></div>
+
+<div id="stage"><svg id="svg" preserveAspectRatio="xMidYMid meet"></svg></div>
+
+<div class="narr" id="narr">
+  <div class="step" id="nstep"></div>
+  <div class="capsub" id="nsub"></div>
+  <div class="ctrls">
+    <button id="prev">‹ Prev</button>
+    <button id="play">❚❚ Pause</button>
+    <button id="next">Next ›</button>
+  </div>
+  <div class="dots" id="dots"></div>
+</div>
+
+<div class="foot">Ingestion is global; personalization happens at match-time. Labels reflect the real pipeline — models, cadences & agent names from the codebase.</div>
+<div id="tip"></div>
+
+<script>
+const VW=1830, VH=980, mLeft=130, mTop=170, mBottom=55, stageGap=170;
+const usableH = VH - mTop - mBottom;
+const xOf = ly => mLeft + ly*stageGap;   // pipeline stage → flows left → right
+const yOf = lx => mTop + lx*usableH;      // spread within a stage → vertical
+
+// ---------- region palette ----------
+const REG = {US:'#57a6ff',EU:'#34d3b6',UK:'#8b7bff',CA:'#ff7a7a',AU:'#ffcf5c',JP:'#ff8ad1',GLB:'#7ee787',PRESS:'#aeb8c8'};
+
+// ---------- nodes ----------
+const srcDefs = [
+  ['s_fda','FDA MedWatch','FDA MedWatch, recalls & safety alerts (RSS)','US'],
+  ['s_openfda','openFDA','openFDA API — 510(k), PMA, MAUDE, Drugs@FDA','US'],
+  ['s_fdaguid','FDA Guidance','FDA guidance docs & warning letters (Firecrawl)','US'],
+  ['s_fedreg','Federal Register','Federal Register rules & Congress.gov bills','US'],
+  ['s_ct','ClinicalTrials.gov','Trials updated in the last 3 days (API)','US'],
+  ['s_ema','EMA','EMA news & medicines (EU)','EU'],
+  ['s_chmp','CHMP · PRAC','CHMP & PRAC monthly meeting highlights','EU'],
+  ['s_mdcg','MDCG · EUR-Lex','MDCG guidance · EUR-Lex · EU CTIS','EU'],
+  ['s_mhra','MHRA (UK)','UK MHRA alerts & Drug Safety Update','UK'],
+  ['s_hc','Health Canada','NOC, MDALL device list & recalls','CA'],
+  ['s_tga','TGA (AU)','Australia TGA — safety & AusPAR','AU'],
+  ['s_pmda','PMDA (JP)','Japan PMDA — approvals & guidance','JP'],
+  ['s_who','WHO · IMDRF · ICH','Global standards bodies & prequalification','GLB'],
+  ['s_press','Press & Industry','Fierce, STAT, Endpoints, RAPS, company IR','PRESS'],
+];
+const sources = srcDefs.map((d,i)=>({
+  id:d[0],label:d[1],sub:d[2],region:d[3],type:'source',r:7,
+  color:REG[d[3]],ly:0,lx:0.035+i*(0.925/(srcDefs.length-1))
+}));
+
+const others = [
+  {id:'t_rss',   label:'RSS Feeds',  sub:'Dozens of agency & press feeds',                 type:'tier',r:16,color:'var(--tier)',ly:1.18,lx:0.27},
+  {id:'t_api',   label:'APIs',       sub:'Structured government data endpoints',            type:'tier',r:16,color:'var(--tier)',ly:1.18,lx:0.50},
+  {id:'t_fire',  label:'Firecrawl',  sub:'AI page-scrape for sites with no feed',           type:'tier',r:16,color:'var(--tier)',ly:1.18,lx:0.73},
+
+  {id:'a_orch',  label:'Fetcher Orchestrator', sub:'Runs all fetchers in parallel · 90s timeout · circuit-breakers', type:'infra',r:19,color:'var(--infra)',ly:2.18,lx:0.50},
+  {id:'a_gate',  label:'Quality Gate & Dedup', sub:'Garbage filter + content-hash de-duplication',                   type:'infra',r:18,color:'var(--infra)',ly:3.02,lx:0.50},
+  {id:'a_class', label:'Classifier',           sub:'Claude Haiku 4.5 — tags region, domain, impact type & severity', type:'llm',  r:21,color:'var(--llm)',  ly:3.86,lx:0.50,llm:true,tag:'Claude Haiku 4.5'},
+  {id:'a_embed', label:'Embedder',             sub:'text-embedding-3-small · 1536-dim vectors for semantic search',  type:'infra',r:18,color:'var(--infra)',ly:4.70,lx:0.50,tag:'1536-dim vectors'},
+  {id:'pool',    label:'Signals Pool',         sub:'Shared store of every classified regulatory signal (~60+ sources, ~90 feeds)', type:'pool',r:46,color:'#dce9ff',ly:5.72,lx:0.50,tag:'~90 source feeds'},
+
+  {id:'p_prod',  label:'Your Product', sub:'e.g. “CardioSense Pro — PMA P200123”',                          type:'product',r:22,color:'var(--prod)',ly:2.55,lx:0.11,tag:'e.g. PMA P200123'},
+  {id:'p_entity',label:'Entity Resolver', sub:'Normalizes & de-dupes to a canonical entity + aliases',      type:'infra',r:16,color:'var(--infra)',ly:3.42,lx:0.11},
+  {id:'p_watch', label:'Watch Items', sub:'Product, competitors, therapeutic areas & frameworks you track', type:'infra',r:17,color:'var(--infra)',ly:4.32,lx:0.14},
+  {id:'p_rel',   label:'Relevance Scorer', sub:'Weighted match — own 1.0 · competitor 0.8 · therapeutic area 0.6 × severity', type:'infra',r:18,color:'var(--infra)',ly:5.28,lx:0.20,tag:'weighted match'},
+  {id:'p_psa',   label:'Profile Search Agent', sub:'Knowledge-graph hops: same family · competitor-of · same TA/pathway', type:'infra',r:18,color:'var(--infra)',ly:5.28,lx:0.045,tag:'knowledge-graph'},
+
+  {id:'o_feed',  label:'Feed Agent',   sub:'Claude Sonnet 4 — “editorial director”, writes 25–40 cross-referenced stories', type:'llm',r:24,color:'var(--llm)',ly:6.86,lx:0.50,llm:true,tag:'Claude Sonnet 4'},
+  {id:'o_stories',label:'Feed Stories',sub:'Synthesized articles, grouped into sections by theme & region', type:'infra',r:18,color:'var(--infra)',ly:7.70,lx:0.50},
+  {id:'o_digest',label:'Digest Agent', sub:'Claude Sonnet 4 — assembles your personalized email digest',    type:'llm',r:20,color:'var(--llm)',ly:8.54,lx:0.50,llm:true,tag:'Claude Sonnet 4'},
+  {id:'o_email', label:'Email · Resend',sub:'Daily / twice-weekly / weekly — in your local morning',        type:'out',r:15,color:'var(--out)',ly:9.38,lx:0.37},
+  {id:'o_user',  label:'You',          sub:'Regulatory & medical-affairs professional',                     type:'out',r:18,color:'var(--out)',ly:9.38,lx:0.63},
+];
+
+const nodes = [...sources, ...others];
+nodes.forEach(n=>{ n.x=xOf(n.ly); n.y=yOf(n.lx); });
+const byId = Object.fromEntries(nodes.map(n=>[n.id,n]));
+
+// ---------- links ----------
+const L = (s,t,k)=>({source:s,target:t,kind:k});
+const links = [
+  // sources -> tiers  (inbound)
+  L('s_fda','t_rss','inbound'), L('s_openfda','t_api','inbound'), L('s_fdaguid','t_fire','inbound'),
+  L('s_fedreg','t_api','inbound'), L('s_ct','t_api','inbound'), L('s_ema','t_rss','inbound'),
+  L('s_chmp','t_fire','inbound'), L('s_mdcg','t_fire','inbound'),
+  L('s_mhra','t_rss','inbound'), L('s_mhra','t_api','inbound'),
+  L('s_hc','t_rss','inbound'), L('s_hc','t_fire','inbound'),
+  L('s_tga','t_rss','inbound'), L('s_tga','t_fire','inbound'),
+  L('s_pmda','t_api','inbound'), L('s_pmda','t_fire','inbound'),
+  L('s_who','t_api','inbound'), L('s_who','t_rss','inbound'),
+  L('s_press','t_rss','inbound'),
+  // tiers -> orchestrator -> ingestion chain -> pool  (inbound)
+  L('t_rss','a_orch','inbound'), L('t_api','a_orch','inbound'), L('t_fire','a_orch','inbound'),
+  L('a_orch','a_gate','inbound'), L('a_gate','a_class','inbound'),
+  L('a_class','a_embed','inbound'), L('a_embed','pool','inbound'),
+  // product personalization chain  (personal)
+  L('p_prod','p_entity','personal'), L('p_entity','p_watch','personal'),
+  L('p_watch','p_rel','personal'), L('p_watch','p_psa','personal'),
+  // reach into the pool  (pull)
+  L('p_rel','pool','pull'), L('p_psa','pool','pull'),
+  // synthesis & delivery  (synth)
+  L('pool','o_feed','synth'), L('p_rel','o_feed','pull'),
+  L('o_feed','o_stories','synth'), L('o_stories','o_digest','synth'),
+  L('o_digest','o_email','synth'), L('o_email','o_user','synth'),
+];
+links.forEach((l,i)=>{ l.bow=((i%5)-2)*9; l.phase=i*0.63; });
+
+const kindColor = {inbound:'var(--inbound)',personal:'var(--personal)',pull:'var(--pull)',synth:'var(--synth)'};
+const kindHex   = {inbound:'#ff9e4a',personal:'#ffb454',pull:'#52d6c9',synth:'#b98cff'};
+const kindSpeed = {inbound:0.19,personal:0.16,pull:0.22,synth:0.15};
+const kindCount = {inbound:3,personal:2,pull:3,synth:2};
+
+// ---------- svg scaffold ----------
+const svg = d3.select('#svg').attr('viewBox',`0 0 ${VW} ${VH}`);
+const defs = svg.append('defs');
+// glow
+const f = defs.append('filter').attr('id','glow').attr('x','-60%').attr('y','-60%').attr('width','220%').attr('height','220%');
+f.append('feGaussianBlur').attr('stdDeviation','4').attr('result','b');
+const fm=f.append('feMerge'); fm.append('feMergeNode').attr('in','b'); fm.append('feMergeNode').attr('in','SourceGraphic');
+// pool gradient
+const pg = defs.append('radialGradient').attr('id','poolg');
+pg.append('stop').attr('offset','0%').attr('stop-color','#eaf2ff');
+pg.append('stop').attr('offset','45%').attr('stop-color','#6fa8ff');
+pg.append('stop').attr('offset','100%').attr('stop-color','#26407e');
+
+// faint grid
+const grid = svg.append('g').attr('opacity',.5);
+for(let i=0;i<=VW;i+=48) grid.append('line').attr('x1',i).attr('y1',0).attr('x2',i).attr('y2',VH).attr('stroke','#0f1626').attr('stroke-width',1);
+for(let j=0;j<=VH;j+=48) grid.append('line').attr('x1',0).attr('y1',j).attr('x2',VW).attr('y2',j).attr('stroke','#0f1626').attr('stroke-width',1);
+
+const gLinks = svg.append('g');
+const gParts = svg.append('g');
+const gNodes = svg.append('g');
+
+// links
+const linkSel = gLinks.selectAll('path').data(links).join('path')
+  .attr('fill','none')
+  .attr('stroke',d=>kindColor[d.kind])
+  .attr('stroke-width',d=>d.kind==='inbound' && (d.source.startsWith?false:false)?2:1.4)
+  .attr('stroke-linecap','round')
+  .attr('opacity',.5);
+linkSel.attr('stroke-width',d=>['t_rss','t_api','t_fire','a_orch','a_gate','a_class','a_embed'].includes(d.source)?2.4:1.5);
+
+// particles
+links.forEach(l=>{
+  const n=kindCount[l.kind]; l.parts=[];
+  for(let i=0;i<n;i++){
+    l.parts.push(gParts.append('circle').attr('r', l.kind==='inbound'?2.1:2.6)
+      .attr('fill',kindHex[l.kind]).attr('opacity',0).node());
+  }
+});
+
+// nodes
+const nodeSel = gNodes.selectAll('g.node').data(nodes,d=>d.id).join('g')
+  .attr('class','node')
+  .call(d3.drag()
+    .on('start',(e,d)=>{sim.alphaTarget(.25).restart();d.fx=d.x;d.fy=d.y;})
+    .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y;})
+    .on('end',(e,d)=>{sim.alphaTarget(0);d.fx=null;d.fy=null;}))
+  .on('mousemove',(e,d)=>showTip(e,d))
+  .on('mouseleave',hideTip);
+
+// pulse ring (for larger nodes)
+nodeSel.filter(d=>d.r>=15).append('circle').attr('class','pulse')
+  .attr('fill','none').attr('stroke',d=>d.color).attr('stroke-width',1.4).attr('opacity',0);
+
+// pool decorative ring
+nodeSel.filter(d=>d.type==='pool').append('circle').attr('class','poolring')
+  .attr('r',d=>d.r+13).attr('fill','none').attr('stroke','#6fa8ff').attr('stroke-width',1.2)
+  .attr('stroke-dasharray','5 9').attr('opacity',.55);
+
+// main circle
+nodeSel.append('circle').attr('class','core')
+  .attr('r',d=>d.r)
+  .attr('fill',d=> d.type==='pool'?'url(#poolg)':d.color)
+  .attr('fill-opacity',d=> d.type==='source'?.95: d.type==='pool'?1:.22)
+  .attr('stroke',d=>d.color)
+  .attr('stroke-width',d=> d.llm?2.2: d.type==='source'?1:1.6)
+  .attr('filter',d=> (d.type!=='source')?'url(#glow)':null);
+
+// llm inner mark
+nodeSel.filter(d=>d.llm).append('text').text('✦')
+  .attr('text-anchor','middle').attr('dy','0.35em').attr('font-size',d=>d.r*0.9)
+  .attr('fill','#e9defc').attr('opacity',.9).attr('pointer-events','none');
+
+// labels
+nodeSel.append('text').attr('class','nlabel')
+  .attr('y',d=>d.r+14).text(d=>d.label);
+nodeSel.filter(d=>d.tag).append('text').attr('class','nsub')
+  .attr('y',d=>d.r+26).text(d=>d.tag);
+
+// ---------- force sim ----------
+const sim = d3.forceSimulation(nodes)
+  .force('x', d3.forceX(d=>xOf(d.ly)).strength(0.92))
+  .force('y', d3.forceY(d=>yOf(d.lx)).strength(d=>d.type==='source'?0.8:0.33))
+  .force('charge', d3.forceManyBody().strength(-150))
+  .force('collide', d3.forceCollide().radius(d=>d.r+(d.type==='source'?14:10)).strength(.9))
+  .force('link', d3.forceLink(links).id(d=>d.id).distance(70).strength(.05))
+  .alphaDecay(.028).velocityDecay(.42);
+
+// ---------- narration ----------
+const stages = [
+  {step:'Overview', sub:'A fleet of agents pulls regulatory intelligence around the clock and matches it to the products you track.',
+   nodes:'ALL'},
+  {step:'① You enter a product', sub:'Type a product (or a 510(k)/PMA number). It’s resolved to a canonical entity and turned into watch items — product, competitors, therapeutic areas, frameworks.',
+   nodes:['p_prod','p_entity','p_watch']},
+  {step:'② Agents fetch the world — 24/7', sub:'~90 sources across the FDA, EMA, MHRA, Health Canada, TGA, PMDA & more. Fast poll every 4h (RSS + APIs); deep Firecrawl scrape daily.',
+   nodes:[...sources.map(s=>s.id),'t_rss','t_api','t_fire','a_orch']},
+  {step:'③ Every event is classified & embedded', sub:'De-duplicated, then Claude Haiku 4.5 tags region / domain / impact / severity; text-embedding-3-small adds semantic vectors — all into one shared Signals Pool.',
+   nodes:['a_orch','a_gate','a_class','a_embed','pool']},
+  {step:'④ Your product reaches into the pool', sub:'The Relevance Scorer (own 1.0 · competitor 0.8 · therapeutic area 0.6 × severity) and Profile Search Agent (knowledge-graph hops) pull the matching signals — tiered must-see / digest / exploratory.',
+   nodes:['p_prod','p_entity','p_watch','p_rel','p_psa','pool']},
+  {step:'⑤ Synthesized & delivered', sub:'The Feed Agent (Claude Sonnet 4, “editorial director”) writes 25–40 cross-referenced stories; the Digest Agent assembles your personalized email — delivered in your local morning via Resend.',
+   nodes:['pool','p_rel','o_feed','o_stories','o_digest','o_email','o_user']},
+];
+let cur=0, playing=true, timer=null;
+const stepEl=document.getElementById('nstep'), subEl=document.getElementById('nsub');
+const dotsEl=document.getElementById('dots');
+stages.forEach((s,i)=>{const d=document.createElement('div');d.className='d';d.onclick=()=>{go(i);pause();};dotsEl.appendChild(d);});
+
+function activeSet(){ const s=stages[cur]; return s.nodes==='ALL'?null:new Set(s.nodes); }
+function applyStage(){
+  const set=activeSet();
+  stepEl.textContent=stages[cur].step; subEl.textContent=stages[cur].sub;
+  [...dotsEl.children].forEach((d,i)=>d.classList.toggle('on',i===cur));
+  nodeSel.transition().duration(500).style('opacity',d=> !set||set.has(d.id)?1:0.09);
+  linkSel.transition().duration(500).attr('opacity',d=>{
+    const on = !set || (set.has(d.source.id)&&set.has(d.target.id));
+    return on?0.7:0.05;
+  });
+}
+function go(i){cur=(i+stages.length)%stages.length;applyStage();}
+function next(){go(cur+1);} function prev(){go(cur-1);}
+function play(){playing=true;document.getElementById('play').textContent='❚❚ Pause';
+  clearInterval(timer);timer=setInterval(()=>go(cur+1),5200);}
+function pause(){playing=false;document.getElementById('play').textContent='▶ Play';clearInterval(timer);}
+document.getElementById('next').onclick=()=>{next();pause();};
+document.getElementById('prev').onclick=()=>{prev();pause();};
+document.getElementById('play').onclick=()=>{playing?pause():play();};
+
+// ---------- tooltip ----------
+const tip=document.getElementById('tip');
+function showTip(e,d){
+  tip.innerHTML=`<b>${d.label}</b><span class="r">${d.sub}</span>`;
+  tip.style.opacity=1;
+  const px=Math.min(e.clientX+16, window.innerWidth-300);
+  tip.style.left=px+'px'; tip.style.top=(e.clientY+16)+'px';
+}
+function hideTip(){tip.style.opacity=0;}
+
+// ---------- animation loop ----------
+let t0=null;
+function bezier(x0,y0,cx,cy,x1,y1,t){
+  const u=1-t;
+  return [u*u*x0+2*u*t*cx+t*t*x1, u*u*y0+2*u*t*cy+t*t*y1];
+}
+function frame(ts){
+  if(t0===null)t0=ts; const time=(ts-t0)/1000;
+  const set=activeSet();
+
+  // node transforms + pulse
+  nodeSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+  nodeSel.select('.pulse').each(function(d){
+    const frac=((time*0.5)+ (d.ly*0.13))%1;
+    d3.select(this).attr('r', d.r + frac*d.r*0.9).attr('opacity',(1-frac)*0.5*(!set||set.has(d.id)?1:0.15));
+  });
+  svg.selectAll('.poolring').attr('transform',`rotate(${time*12})`);
+
+  // links + particles
+  linkSel.attr('d',d=>{
+    const s=d.source,tg=d.target;
+    const mx=(s.x+tg.x)/2, my=(s.y+tg.y)/2;
+    const amp=Math.min(36, 10+0.14*Math.abs(tg.x-s.x));
+    d.cx=mx; d.cy=my + d.bow + amp*Math.sin(time*0.8 + d.phase);
+    return `M${s.x},${s.y} Q${d.cx},${d.cy} ${tg.x},${tg.y}`;
+  });
+  links.forEach(d=>{
+    const on = !set || (set.has(d.source.id)&&set.has(d.target.id));
+    const n=d.parts.length, sp=kindSpeed[d.kind];
+    d.parts.forEach((el,i)=>{
+      if(!on){el.setAttribute('opacity',0);return;}
+      let tt=((time*sp)+i/n)%1;
+      const p=bezier(d.source.x,d.source.y,d.cx,d.cy,d.target.x,d.target.y,tt);
+      el.setAttribute('cx',p[0]); el.setAttribute('cy',p[1]);
+      const fade=Math.sin(tt*Math.PI); // dim at the ends
+      el.setAttribute('opacity',0.35+0.55*fade);
+    });
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- legend ----------
+document.getElementById('legend').innerHTML = `
+  <div class="lrow"><span class="dot" style="color:var(--us)"></span>Regulatory source (by region)</div>
+  <div class="lrow"><span class="dot" style="color:var(--tier)"></span>Fetch tier — RSS · API · Firecrawl</div>
+  <div class="lrow"><span class="dot" style="color:var(--infra)"></span>Pipeline agent</div>
+  <div class="lrow"><span class="dot" style="color:var(--llm)"></span>Claude LLM agent ✦</div>
+  <div class="lrow"><span class="dot" style="color:var(--prod)"></span>Your tracked product</div>
+  <div class="lrow"><span class="dot" style="color:var(--out)"></span>Feed & digest to you</div>
+  <div class="lrow" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+    <span class="lt" style="background:var(--inbound)"></span>global fetch &nbsp;
+    <span class="lt" style="background:var(--pull)"></span>product match</div>`;
+
+// init — start on the overview, paused (no autoplay)
+applyStage(); pause();
+</script>
+</body>
+</html>
